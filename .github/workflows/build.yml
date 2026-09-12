@@ -13,24 +13,20 @@ jobs:
 
     steps:
 
-      # 1. Get project files
       - name: Checkout project
         uses: actions/checkout@v4
 
-      # 2. Python
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
 
-      # 3. Java 17
       - name: Set up Java
         uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: "17"
 
-      # 4. Linux dependencies
       - name: Install Linux dependencies
         run: |
           sudo apt-get update
@@ -49,14 +45,13 @@ jobs:
             libffi-dev \
             libssl-dev
 
-      # 5. Install Buildozer
       - name: Install Buildozer
         run: |
           python -m pip install --upgrade pip
-          python -m pip install buildozer cython==0.29.36
+          python -m pip install buildozer
+          python -m pip install cython==0.29.36
 
-      # 6. Enable Buildozer automatic SDK license acceptance
-      - name: Configure Buildozer SDK licenses
+      - name: Configure Buildozer
         run: |
           if grep -qE '^[[:space:]]*#?[[:space:]]*android.accept_sdk_license' buildozer.spec; then
             sed -i -E \
@@ -66,44 +61,32 @@ jobs:
             echo "android.accept_sdk_license = True" >> buildozer.spec
           fi
 
-          echo "Checking Buildozer configuration:"
+          echo "===== Buildozer SDK license setting ====="
           grep "android.accept_sdk_license" buildozer.spec
 
-      # 7. Prepare Android SDK
-      - name: Prepare Android SDK
+      - name: Prepare Buildozer SDK licenses
         run: |
-          mkdir -p "$HOME/.android"
+          SDK_DIR="$HOME/.buildozer/android/platform/android-sdk"
 
-          touch "$HOME/.android/repositories.cfg"
+          mkdir -p "$SDK_DIR/licenses"
 
-          SDKMANAGER="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          cat > "$SDK_DIR/licenses/android-sdk-license" << 'EOF'
+          8933bad161af4178b1185d1a37fbf41ea5269c55
+          d56f5187479451eabf01fb78af6dfcb131a6481e
+          24333f8a63b6825ea9c5514f83c2829b004d1fee
+          EOF
 
-          if [ ! -f "$SDKMANAGER" ]; then
-            SDKMANAGER="$ANDROID_HOME/cmdline-tools/bin/sdkmanager"
-          fi
+          echo "===== SDK license file ====="
+          cat "$SDK_DIR/licenses/android-sdk-license"
 
-          echo "Using SDK manager:"
-          echo "$SDKMANAGER"
+      - name: Download Android SDK with Buildozer
+        run: |
+          buildozer android p4a -- --help
 
-          yes | "$SDKMANAGER" --licenses || true
-
-          yes | "$SDKMANAGER" \
-            "platform-tools" \
-            "platforms;android-35" \
-            "build-tools;35.0.0"
-
-          echo "Installed Build Tools:"
-          ls -la "$ANDROID_HOME/build-tools" || true
-
-      # 8. Build APK
       - name: Build APK
-        env:
-          BUILDOZER_WARN_ON_ROOT: "1"
-          P4A_BUILD_ARGS: "--allow-prerelease"
         run: |
           buildozer -v android debug
 
-      # 9. Upload APK
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
