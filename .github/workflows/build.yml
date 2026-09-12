@@ -49,10 +49,16 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install buildozer cython==0.29.36
 
-      - name: Enable automatic Android SDK license acceptance
+      - name: Enable Android SDK licenses
         run: |
-          sed -i 's/^#android.accept_sdk_license = False/android.accept_sdk_license = True/' buildozer.spec
-          sed -i 's/^android.accept_sdk_license = False/android.accept_sdk_license = True/' buildozer.spec
+          if grep -qE '^[[:space:]]*#?[[:space:]]*android.accept_sdk_license' buildozer.spec; then
+            sed -i -E 's/^[[:space:]]*#?[[:space:]]*android.accept_sdk_license[[:space:]]*=.*/android.accept_sdk_license = True/' buildozer.spec
+          else
+            echo 'android.accept_sdk_license = True' >> buildozer.spec
+          fi
+
+          echo "Android SDK license setting:"
+          grep "android.accept_sdk_license" buildozer.spec
 
       - name: Build APK
         run: |
