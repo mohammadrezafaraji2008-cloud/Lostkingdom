@@ -12,20 +12,25 @@ jobs:
     runs-on: ubuntu-22.04
 
     steps:
+
+      # 1. Get project files
       - name: Checkout project
         uses: actions/checkout@v4
 
+      # 2. Python
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
 
+      # 3. Java 17
       - name: Set up Java
         uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: "17"
 
+      # 4. Linux dependencies
       - name: Install Linux dependencies
         run: |
           sudo apt-get update
@@ -44,26 +49,61 @@ jobs:
             libffi-dev \
             libssl-dev
 
+      # 5. Install Buildozer
       - name: Install Buildozer
         run: |
           python -m pip install --upgrade pip
           python -m pip install buildozer cython==0.29.36
 
-      - name: Enable Android SDK licenses
+      # 6. Enable Buildozer automatic SDK license acceptance
+      - name: Configure Buildozer SDK licenses
         run: |
           if grep -qE '^[[:space:]]*#?[[:space:]]*android.accept_sdk_license' buildozer.spec; then
-            sed -i -E 's/^[[:space:]]*#?[[:space:]]*android.accept_sdk_license[[:space:]]*=.*/android.accept_sdk_license = True/' buildozer.spec
+            sed -i -E \
+              's/^[[:space:]]*#?[[:space:]]*android.accept_sdk_license[[:space:]]*=.*/android.accept_sdk_license = True/' \
+              buildozer.spec
           else
-            echo 'android.accept_sdk_license = True' >> buildozer.spec
+            echo "android.accept_sdk_license = True" >> buildozer.spec
           fi
 
-          echo "Android SDK license setting:"
+          echo "Checking Buildozer configuration:"
           grep "android.accept_sdk_license" buildozer.spec
 
+      # 7. Prepare Android SDK
+      - name: Prepare Android SDK
+        run: |
+          mkdir -p "$HOME/.android"
+
+          touch "$HOME/.android/repositories.cfg"
+
+          SDKMANAGER="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+
+          if [ ! -f "$SDKMANAGER" ]; then
+            SDKMANAGER="$ANDROID_HOME/cmdline-tools/bin/sdkmanager"
+          fi
+
+          echo "Using SDK manager:"
+          echo "$SDKMANAGER"
+
+          yes | "$SDKMANAGER" --licenses || true
+
+          yes | "$SDKMANAGER" \
+            "platform-tools" \
+            "platforms;android-35" \
+            "build-tools;35.0.0"
+
+          echo "Installed Build Tools:"
+          ls -la "$ANDROID_HOME/build-tools" || true
+
+      # 8. Build APK
       - name: Build APK
+        env:
+          BUILDOZER_WARN_ON_ROOT: "1"
+          P4A_BUILD_ARGS: "--allow-prerelease"
         run: |
           buildozer -v android debug
 
+      # 9. Upload APK
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
